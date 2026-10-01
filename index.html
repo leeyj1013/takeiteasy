@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Take It Easy 전략 탐색하기</title>
+<style>
+:root{
+  /* Miro design tokens */
+  --primary:#1c1c1e; --charcoal:#2c2c34; --on-primary:#ffffff;
+  --yellow:#ffd02f; --yellow-deep:#fcb900; --yellow-light:#fff4c4; --yellow-dark:#746019;
+  --blue:#4262ff; --blue-450:#5b76fe;
+  --coral:#ff9999; --coral-light:#ffc6c6; --coral-dark:#600000;
+  --rose:#ffd8f4; --rose-light:#fde0f0;
+  --teal:#0fbcb0; --teal-light:#c3faf5; --moss-dark:#187574;
+  --orange-light:#ffe6cd;
+  --canvas:#ffffff; --surface:#f7f8fa; --surface-soft:#fafbfc; --surface-yellow:#fff8e0;
+  --hairline:#e0e2e8; --hairline-soft:#eef0f3; --hairline-strong:#c7cad5;
+  --ink-deep:#050038; --ink:#1c1c1e; --slate:#555a6a; --steel:#6b6f7e; --stone:#8e91a0; --muted:#a5a8b5;
+  --r-md:8px; --r-lg:12px; --r-xl:16px; --r-xxl:20px; --r-xxxl:28px; --r-feature:32px; --r-full:9999px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--surface); color:var(--ink-deep); display:flex; flex-direction:column; overflow:hidden;
+  user-select:none; -webkit-user-select:none; letter-spacing:-.2px; font-weight:500;
+}
+button{font-family:inherit;cursor:pointer;letter-spacing:-.2px}
+
+/* ===== 헤더 ===== */
+header{
+  height:74px;flex:0 0 74px;background:var(--canvas);border-bottom:1px solid var(--hairline);
+  display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:16px;
+}
+.hl{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{width:42px;height:42px;object-fit:contain;display:block;flex:0 0 auto}
+.apptitle{font-size:24px;font-weight:600;letter-spacing:-.8px;color:var(--ink-deep);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr{display:flex;align-items:center;gap:8px}
+#btn-home{
+  background:transparent;border:1px solid var(--hairline-strong);color:var(--ink);
+  border-radius:var(--r-full);padding:11px 20px;font-size:15px;font-weight:500;white-space:nowrap;
+  transition:background .15s,border-color .15s;margin-right:6px;
+}
+#btn-home:hover{background:var(--surface);border-color:var(--ink)}
+.tab{
+  background:transparent;border:1px solid var(--hairline-strong);color:var(--ink);
+  border-radius:var(--r-full);padding:11px 22px;font-size:16px;font-weight:500;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.tab:hover{background:var(--surface);border-color:var(--ink)}
+.tab.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+
+/* ===== 본문 ===== */
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;padding:16px 24px 20px;min-height:0}
+.left{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.boardwrap{
+  flex:1;min-height:0;position:relative;background:var(--ink-deep);
+  border:none;border-radius:var(--r-feature);display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+#btn-hint{
+  position:absolute;top:16px;left:16px;z-index:5;
+  background:var(--yellow);color:var(--primary);border:none;border-radius:var(--r-full);
+  padding:12px 22px;font-size:15px;font-weight:600;transition:background .15s;
+}
+#btn-hint:hover:not(:disabled){background:var(--yellow-deep)}
+#btn-hint:disabled{background:rgba(255,255,255,.14);color:rgba(255,255,255,.45);cursor:default}
+#board{width:100%;height:100%;display:block;touch-action:manipulation}
+.hit{fill:transparent;cursor:pointer}
+.hit.locked{cursor:default}
+
+/* 완성 줄 */
+@keyframes glowPulse{0%,100%{stroke-width:16;opacity:.85}50%{stroke-width:24;opacity:1}}
+.glow{stroke-linecap:round;animation:glowPulse 1.5s ease-in-out infinite}
+@keyframes beamRun{from{stroke-dashoffset:520}to{stroke-dashoffset:0}}
+.beam{stroke:#fff;stroke-width:7;stroke-linecap:round;stroke-dasharray:34 130;animation:beamRun 1.9s linear infinite}
+.hintline{stroke-dasharray:11 9;stroke-width:5;opacity:.9;stroke-linecap:round}
+
+/* 메시지 띠 */
+#banner{
+  flex:0 0 auto;min-height:76px;background:var(--canvas);border:1px solid var(--hairline);
+  border-radius:var(--r-xxl);display:flex;align-items:center;justify-content:center;gap:14px;
+  padding:14px 22px;text-align:center;font-size:21px;font-weight:500;color:var(--ink-deep);line-height:1.4;
+}
+#banner.ok{background:var(--teal-light);border-color:var(--teal);color:var(--moss-dark)}
+#banner.warn{background:var(--coral-light);border-color:var(--coral);color:var(--coral-dark)}
+#banner.hint{background:var(--yellow-light);border-color:var(--yellow);color:var(--yellow-dark)}
+#banner .mini{
+  background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-full);
+  padding:10px 20px;font-size:15px;font-weight:500;white-space:nowrap;
+}
+#banner .mini:hover{background:var(--charcoal)}
+#banner .eq{display:inline-flex;align-items:center;gap:6px;background:var(--canvas);
+  border:1px solid var(--hairline-strong);border-radius:var(--r-lg);padding:6px 12px;
+  font-size:19px;font-weight:600;color:var(--ink-deep);margin:0 4px}
+#banner .sw{width:14px;height:14px;border-radius:4px;display:inline-block}
+
+/* ===== 오른쪽 패널 ===== */
+.right{background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-xxxl);padding:20px;
+  display:flex;flex-direction:column;gap:14px;min-height:0;overflow-y:auto}
+.sttl{font-size:20px;font-weight:600;line-height:1.3;letter-spacing:-.5px;color:var(--ink-deep)}
+.stag{display:inline-block;margin-top:8px;background:var(--yellow-light);color:var(--yellow-dark);
+  font-size:13px;font-weight:600;padding:6px 14px;border-radius:var(--r-full)}
+.card{border:1px solid var(--hairline-soft);border-radius:var(--r-xxl);padding:14px;background:var(--surface-soft)}
+.card h3{font-size:12px;font-weight:600;color:var(--steel);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase}
+#chipbox{display:flex;justify-content:center;align-items:center}
+#chip{cursor:grab;touch-action:none}
+#chip.drag{cursor:grabbing}
+.chiphelp{margin-top:8px;font-size:13px;color:var(--stone);text-align:center;font-weight:400}
+
+.srow{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0;flex-wrap:wrap}
+.tagline{display:inline-flex;align-items:center;gap:7px;font-size:15px;font-weight:500;color:var(--ink-deep);
+  border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:6px 14px;background:var(--canvas)}
+.tagline i{width:14px;height:14px;border-radius:4px;display:inline-block}
+.box{width:58px;height:52px;border:1px solid var(--hairline-strong);border-radius:var(--r-lg);background:var(--canvas);
+  font-size:24px;font-weight:600;text-align:center;color:var(--ink-deep);line-height:50px;cursor:pointer;
+  transition:border-color .15s,background .15s}
+.box.wide{width:76px}
+.box.on{border-color:var(--yellow-deep);background:var(--yellow-light)}
+.box.ok{border-color:var(--teal);background:var(--teal-light);color:var(--moss-dark)}
+.box.no{border-color:var(--coral);background:var(--coral-light);color:var(--coral-dark);animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.op{font-size:22px;font-weight:500;color:var(--steel)}
+.fb{font-size:14px;font-weight:500;text-align:center;min-height:21px;color:var(--yellow-dark);line-height:1.4}
+.muted{font-size:14px;color:var(--stone);text-align:center;padding:12px 4px;line-height:1.55;font-weight:400}
+
+#pad{display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+#pad.show{display:grid}
+#pad button{background:var(--canvas);border:1px solid var(--hairline-strong);border-radius:var(--r-lg);height:50px;
+  font-size:20px;font-weight:500;color:var(--ink-deep);transition:background .1s}
+#pad button:hover{background:var(--surface)}
+#pad button:active{background:var(--ink-deep);color:#fff;border-color:var(--ink-deep)}
+#pad .fn{font-size:14px;color:var(--slate)}
+#pad .go{font-size:15px;background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+#pad .go:hover{background:var(--charcoal)}
+
+.acts{margin-top:auto;display:flex;flex-direction:column;gap:10px;padding-top:6px}
+#btn-place{background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-full);
+  padding:17px;font-size:19px;font-weight:600;transition:background .15s}
+#btn-place:hover:not(:disabled){background:var(--charcoal)}
+#btn-place:disabled{background:var(--hairline);color:var(--muted);cursor:default}
+.sub{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sub button{background:transparent;border:1px solid var(--hairline-strong);border-radius:var(--r-full);
+  padding:13px 8px;font-size:15px;font-weight:500;color:var(--ink);transition:background .15s,border-color .15s}
+.sub button:hover{background:var(--surface);border-color:var(--ink)}
+
+/* ===== 처음 화면 ===== */
+#home{position:fixed;inset:0;background:rgba(5,0,56,.55);z-index:50;display:flex;align-items:center;
+  justify-content:center;padding:24px;overflow:auto}
+#home.off{display:none}
+.hcard{background:var(--canvas);border-radius:var(--r-feature);max-width:900px;width:100%;padding:36px 40px;text-align:center}
+.hbrand{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px}
+.hbrand img{width:56px;height:56px;object-fit:contain}
+.hcard h1{font-size:34px;font-weight:600;letter-spacing:-1px;color:var(--ink-deep)}
+.hcard p.sub2{margin-top:10px;font-size:17px;color:var(--slate);font-weight:400}
+.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:26px 0}
+.scard{border:none;border-radius:var(--r-xxxl);padding:22px 18px;text-align:left;transition:transform .15s}
+.scard:nth-child(1){background:var(--yellow-light)}
+.scard:nth-child(2){background:var(--teal-light)}
+.scard:nth-child(3){background:var(--rose-light)}
+.scard:hover{transform:translateY(-3px)}
+.scard b{display:block;font-size:19px;font-weight:600;color:var(--ink-deep);margin-bottom:8px;letter-spacing:-.4px}
+.scard span{display:block;font-size:15px;color:var(--slate);font-weight:400;line-height:1.5}
+.strat{background:var(--surface);border:1px solid var(--hairline-soft);border-radius:var(--r-xxxl);
+  padding:22px 26px;text-align:left}
+.strat h2{font-size:12px;font-weight:600;color:var(--steel);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase}
+.strat li{font-size:16px;font-weight:400;color:var(--ink-deep);line-height:1.9;margin-left:18px}
+.quote{margin-top:16px;background:var(--yellow-light);border:none;border-radius:var(--r-xl);padding:14px 18px;
+  font-size:16px;font-weight:500;color:var(--yellow-dark)}
+.hstart{margin-top:22px;background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-full);
+  padding:16px 46px;font-size:17px;font-weight:600;transition:background .15s}
+.hstart:hover{background:var(--charcoal)}
+
+#ghost{position:fixed;z-index:80;pointer-events:none;display:none;transform:translate(-50%,-50%)}
+
+@media (max-width:1180px){
+  main{grid-template-columns:minmax(0,1fr) 344px;padding:12px 16px 16px}
+  .apptitle{font-size:19px}
+  .tab{padding:10px 16px;font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hl">
+    <img class="logo" src="data:image/png;base64,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" alt="교구 로고">
+    <span class="apptitle">Take it easy(테이크잇이지)</span>
+  </div>
+  <div class="hr">
+    <button id="btn-home">처음으로</button>
+    <button class="tab on" data-st="1">1단계</button>
+    <button class="tab" data-st="2">2단계</button>
+    <button class="tab" data-st="3">3단계</button>
+  </div>
+</header>
+
+<main>
+  <section class="left">
+    <div class="boardwrap">
+      <button id="btn-hint">힌트 (0/1)</button>
+      <svg id="board" viewBox="0 0 560 600" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div id="banner"></div>
+  </section>
+
+  <aside class="right">
+    <div>
+      <div class="sttl" id="s-title"></div>
+      <span class="stag" id="s-tag"></span>
+    </div>
+
+    <div class="card">
+      <h3>놓아야 할 칩</h3>
+      <div id="chipbox"><svg id="chip" width="150" height="150" viewBox="0 0 150 150"></svg></div>
+      <div class="chiphelp">칸 번호를 누르거나, 칩을 끌어다 놓으세요</div>
+    </div>
+
+    <div class="card">
+      <h3>점수 계산</h3>
+      <div id="score"></div>
+      <div id="pad">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button class="fn" data-k="back">⌫ 지움</button>
+        <button data-k="0">0</button>
+        <button class="go" data-k="ok">확인</button>
+      </div>
+    </div>
+
+    <div class="acts">
+      <button id="btn-place" disabled>여기에 놓기</button>
+      <div class="sub">
+        <button id="btn-retry">다시 시도해보기</button>
+        <button id="btn-next">다른 문제</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="home">
+  <div class="hcard">
+    <div class="hbrand"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAACZBAMAAABalCx7AAAAMFBMVEUCAgJCh5fncjhylEPvozADAQXpoEz09fXgeUY+hZWVmFZXWzFrpqmeYjThpWwwU1ulNnmDAAAAEHRSTlP9/v7+/gDtCfr+7+oa557515rjRAAACzJJREFUeNrtWn+MFOUZfnZmZ3bg5Ni7qDnvsI53BUFK3WhSLSqeViCw9Zxec7WCPS8EqFbFqynhEksdYk2O2JotFhut0pNWA11KpybDtVeMB01p1UA3EgLlwjFgBKwWll+6e3M71z9mZ/ebb775ZjFN0z/8/ridvfnmmff93vd93h93wOfr/27FvIu5D2dY9xMPT9HKl0PbWBuc41jRFQQc+vCn+1MAkEt5d0oiAJT237zH/S7PC5VqxgvVa9H9Ob+nuQkA0FS5I7g/m8ZaTgLAjhPhav570bsU4OaeVOhuIXfDKQCT8pyDO3PEDygeaebsbhJOAjsGeZaYqIooAsCkE01cy52MEJAUUQCAWSm+K6QgW/wdTs4H2BvhW3XR7pfxAWYi9++L2vARCShG7S4gF7Xlot/bItdw1IY4GzDnkyQXuAhfQgAZANYAwHrCuN7FXurpmU98+dujEaICib3vCgDu9r4Xnw/xJmHohtUL/7W52+c3JDmI7oPxL1AP2u97V3uXE34o7OqwDXTZl/t8c2dQwn25jlZKZ6b9mzuyq7tgm9+3IlR+wrFGAcBjNxva8yyFrxjosgApfUy1eNYBnMB9Fh6uHXHfKG1vjLKy+8Zs5bvGtMgmaLCN1RbSh1kixslw1EiNAZt5gmkJMLtGJEhGbB4XcLPh+CUUWW7zjKrB7ty6OqMhLZ/mAq5Xp1uw8esKVZRYGj8LwIyt/CgNYIyhMwF4+AA0YHJPCiWxtD9VEllO02xpsO+XR4W3oEnG0Z6AYxNWnjU7DSQ+GQBEiKkQDkoMAuYWC87SNIDWoJVJchBNA475XS4JbHJg290ATqgq7F5u6AElVYKNbwb5thJ6wvWSZdefAIBd0GxcqMY3i75E04DEFNETRbEsmFsAAMsAQOVFClCanQbSC4IpxvjS39xHGwEILs0U05AGwQcUD4eI+PStr211bWLCXuT+zgLg6HxAzHBFfCyYVZ4+nwGATQDq3fOsr0FliJNNA5L5PVZuvrG8WyoXBQVVZbmBCEA4VSkc9r7siGhrO8c4mzNXA7F0C4y3r3H9ozkz85BwjectR0gJqzGbesk0IJm5kESpWAC8ZJLpZZUIdBotbraB9D0MQEMFzgGAHqgWeIBYrwEwGLyg9wLXAXYnERu9NQD2AoAWVkyYQJH4OnIqEjC3wgTUyQwsHcCPPAesoYQox8ocVQI2Oil2gaUCqPfi11JrOMP9B0zATr/C2Lm0vHkLLkXCOaoEmNL7wY2PrXRVNWPkGURK6Ar4ImNjchOA3qjSlAYspQGYQz2BbcpabRjACG2QcxGABwY12OkXAyZZ+1ftdQtQQARKOZfzzrCE9HQLphM8QW3yA5vYGlo8CcWDgxbs9ADjuSWjnoLVB4TOqDMsrXIA8/pgiOaq+tmazleZBFwzogHIuI+XcmQlXNWsiJr98OA+UyuT2ZpiAihmWCVxIqTzYQDOGNEAaIIKuADVVhfVmqM4pWYJDxzQAGB7pYq7hzZ3grZrglcf5h7b6LpIttwRrMdNLJ6tFvVFiSthQup1X+4WiKPQgiWxcZ/RXW3EDanT+A4zSTUBwLSrxDx1zn+u9Lc35gGgsXVi9u+8tIT66W3CrESeSlJVCYsb7TX+9BKIgpOzMsVqg3Fi16rjg1/hWPmX5miEj31y5kGisnfuODv1WxbzDF3/eH4vJWGwk/K/0RkN6wLKD9600+8kcz7LIEiga+nqlz3iJeD4SuI62uxlgav0GpHpAEwiAS+Wah8p1CRh5IzgYrSEV/gA9YjdOXRGAWo+QC0KD2NqhG39gCV+drwl+p3N1LhP5I6W1mrAlJu5Ag5RHl7izT1KGoDzXCWGAiHDQVTcW1/fEI73E9bItM6oGMwgN8+vTsDew/nDAMRqihFLn9wOZ/r/Zqir6ICljkJw1OMqHI89pK9V7JVvSE6cTVJzQ8SSp32/9AD7Xwp7ZXfZ7WPJ8HFkEPChoXAlXMSzMwuoBdEFlKdxTkXekgJwFQdP+TRPuc0DvGMeexNArI83X4xREnIFBORDfAEBRT7mk3Cc7wljOmIF/gj0HC6JvuqQj3K/fGgKYK3NlIKRjt0aASgfCjqh4j+EifylDXWb6DZNKYRIKgJQIko+iB9TddbwGYm2ZSFaQnll6K0dXQ+GWVIEEGdKuHzrzm9YnoST/DXO6ezVt/+M8hx2r0cUPeu6cHmICVZpSJysqTUj1tyObDb4fteiIxkUV+XZnhQGKL/2Rpfksf4YZVADwF3DLIXDVb5lpmSnG8sPyf57l7WTtUeZb0IkjC9odyGeGYS5Y5j9sgsGgN3tNZ3h3KnbFgCA/OwqO10htTFG3eHUZpQ9owuVdgBf/YVlzqgISKkcm94Le0OyNitnsh9Ma0e83rGFj0P9ekMGUlFhG4UCHH9Sazn4Ou4c0Yz7VIS4jTL5DbT8oY9ym6lTK2yjEH/Viy+Wnu3++1F0bj9CnPpoA6LY5pjqMg4NKL+pdhr/7JXs+vgwD1AJULiu60/lg4DozkmAoRmxaSQf8lMKSYqBSHldhZ3VCJ8JzKvC1zqGypCPQAN8AkI+1EATs+dBTQUq4QcAMf9DCTYafVEyWlZ54iJVyQq/zehRgJfd9QElYFXC+K2GH1BK76IOMUgOBUk9Liz1CTjmGTW/msoFCUOiKCJIXw/ZVnERxWWVXEIzwoW7Fcr9g4D3ZyCZfmtWyOHW4MSATvcBlePPSYD9czAzhkT16BcA3xnmk0GjzMtLgI0bB5hWnk+/fxtJOvrjQQnjr0HLdklGI0NCpbDuqXGftS60NxChqDxXdmxB9UWe4ACG6HMlL5YVXtXZh8cZgH9p7TBsTbLrvzjAjOV+QO9TCjqUvv4+9Pd51qvPC6g/Fgy9+GJpBFf+Cp0G6YkBctB16DpdFOeTDIK907LUGTuXCY7zGw4J6PqZvB7giSSDYONHoRnvz310N6WzZ2X3EPWnVljCVr/QFdbwA87LSzYah+UjNGOTTyufrrCykuZzmGof4HMb+RlVM2PTMLZswCF9WyZzio4fnDS6hK3a24WwCrYi4WWtZhqNw8CjuyU70TDETAHKp+3TLQC9txHMVZXQV87dse3e7R07AOx759Ds3x9a7I0uZLKci4tXnweAf7S+6qGNIz7OKjjj9ats6QkAGF/WifRCt4igi6XC6dVulAwq1TBi5+UlI5Z6v9tEvnWVIdkLr2T6zCOutSTnVMTIVF7RWpTKVD3ea2WBbibgcq3GGSxUDbaXSxbc2wVsYbVsEyNlkh6+LaKcG1v6RvYFL+DGi9mWP/0wIg/rjFKFdBu5WyDa8JVW8wCzcvBmnMZ4khEppMpjL5OvD2vx9aOGFjE/jFyyr8be6B6LLTSxivZgXmb2emQsy/kOAEhc2BXW69VQCBEup5ST7MPX6qHtbU8EnET2y4V1ZhbAdRsGmIBxEP9vFD6+TBIG7a+bbxvomsZgV2+4uSvJB1wyHCOsMr7ulfkts1teJU5hfKJwKUMMbE9NnUwybGEijwZfDpjwnSEk/iHKKZwliaCgrGto6NeZI4fyIIjvON16xCCofw09CCq08wTUAeAUpxou5AOzrz++M8AbAwGYKoSXDfXHgtM5RQ+J3ZWVBqch1KvOMiec77mf9mL385EyA7QRpnQ/vDpqojyT888UK2xz0XtymRv7bW1hw8uzKi0Ml23q3O1yOEUluS1L4C1TylP98L/+lCUkh4Y8Cc8zi2eWr9RIsHVE1/5ZVgDwYg+rifedoU6HWy0pgBNoE5cI+GMAQBTnQp9I1mZl1K0ZqMRbyGqgh9dcQEx5ElIb1yb5a0PxPl//hfUfph2Tas5uIP4AAAAASUVORK5CYII=" alt=""><h1>Take it easy(테이크잇이지)</h1></div>
+    <p class="sub2">보드게임을 하기 전에, 좋은 수를 고르는 방법을 함께 찾아봐요.</p>
+    <div class="stages">
+      <button class="scard" data-go="1"><b>1단계</b><span>어디에 놓는 게 좋을까?<br>세로(│) 줄 찾기</span></button>
+      <button class="scard" data-go="2"><b>2단계</b><span>어디에 놓는 게 좋을까?<br>비스듬한(↗) 줄 찾기</span></button>
+      <button class="scard" data-go="3"><b>3단계</b><span>어떤 줄을 포기하는 게<br>좋을까?</span></button>
+    </div>
+    <div class="strat">
+      <h2>우리가 익힐 전략</h2>
+      <ol>
+        <li>세로(│) 방향부터 차근차근 살펴봐요.</li>
+        <li>비스듬한(↗ ↘) 줄도 함께 봐요.</li>
+        <li>모든 줄을 살릴 수 없다면 무엇을 지킬지 생각해요.</li>
+        <li>완성될 줄의 점수를 계산해서 비교해요.</li>
+      </ol>
+      <div class="quote">"좋은 수는 그냥 찾는 게 아니라, 이유를 설명할 수 있는 수예요!"</div>
+    </div>
+    <button class="hstart" data-go="1">1단계부터 시작하기</button>
+  </div>
+</div>
+
+<svg id="ghost" width="150" height="150" viewBox="0 0 150 150"></svg>
+
+<script>
+/* ================= 데이터 ================= */
+var DATA = {"cells":[[-2,0],[-2,1],[-2,2],[-1,-1],[-1,0],[-1,1],[-1,2],[0,-2],[0,-1],[0,0],[0,1],[0,2],[1,-2],[1,-1],[1,0],[1,1],[2,-2],[2,-1],[2,0]],"lines":[{"dir":"v","cells":[0,1,2]},{"dir":"v","cells":[3,4,5,6]},{"dir":"v","cells":[7,8,9,10,11]},{"dir":"v","cells":[12,13,14,15]},{"dir":"v","cells":[16,17,18]},{"dir":"ne","cells":[0,3,7]},{"dir":"ne","cells":[1,4,8,12]},{"dir":"ne","cells":[2,5,9,13,16]},{"dir":"ne","cells":[6,10,14,17]},{"dir":"ne","cells":[11,15,18]},{"dir":"se","cells":[7,12,16]},{"dir":"se","cells":[3,8,13,17]},{"dir":"se","cells":[0,4,9,14,18]},{"dir":"se","cells":[1,5,10,15]},{"dir":"se","cells":[2,6,11]}],"problems":{"1":[{"board":{"0":[5,7,8],"1":[5,2,8],"2":[1,2,3],"4":[1,6,3],"5":[5,7,4],"6":[1,6,4],"8":[9,7,8],"9":[9,6,8],"10":[9,7,4],"11":[9,2,4],"12":[9,2,3],"13":[5,6,3],"14":[1,7,3],"16":[5,2,3],"17":[5,6,4],"18":[1,7,4]},"empties":[7,3,15],"tile":[9,6,4],"answer":7,"line":{"dir":"v","cells":[7,8,9,10,11],"value":9,"len":5,"score":45}},{"board":{"0":[5,7,8],"1":[1,7,8],"2":[9,2,8],"3":[9,2,3],"4":[9,6,3],"5":[5,6,3],"8":[5,7,3],"9":[5,6,4],"10":[5,2,8],"11":[5,2,3],"13":[1,7,4],"14":[9,6,4],"15":[9,6,8],"16":[1,6,4],"17":[9,2,4],"18":[1,6,3]},"empties":[7,12,6],"tile":[5,6,8],"answer":7,"line":{"dir":"v","cells":[7,8,9,10,11],"value":5,"len":5,"score":25}},{"board":{"0":[1,2,8],"1":[1,7,8],"2":[9,7,8],"3":[9,7,3],"4":[9,2,8],"6":[9,6,3],"7":[1,6,3],"8":[9,6,4],"10":[5,7,3],"11":[5,2,8],"12":[1,7,4],"13":[5,2,4],"14":[9,7,4],"15":[5,6,8],"16":[1,7,3],"18":[9,2,4]},"empties":[5,17,9],"tile":[9,6,8],"answer":5,"line":{"dir":"v","cells":[3,4,5,6],"value":9,"len":4,"score":36}},{"board":{"1":[1,7,8],"2":[1,7,4],"3":[9,6,3],"4":[9,7,4],"5":[5,6,3],"6":[9,6,4],"7":[9,6,8],"8":[9,2,4],"9":[9,2,8],"10":[9,7,8],"13":[1,7,3],"14":[5,7,4],"15":[1,6,4],"16":[1,6,8],"17":[5,6,4],"18":[5,7,3]},"empties":[11,12,0],"tile":[9,2,3],"answer":11,"line":{"dir":"v","cells":[7,8,9,10,11],"value":9,"len":5,"score":45}},{"board":{"0":[9,2,4],"1":[5,6,8],"2":[1,7,3],"3":[5,2,4],"4":[5,6,4],"6":[5,6,3],"7":[5,7,3],"8":[9,7,8],"9":[1,2,8],"10":[9,7,4],"11":[1,7,4],"14":[9,6,3],"15":[1,2,3],"16":[5,2,3],"17":[9,2,8],"18":[9,7,3]},"empties":[5,12,13],"tile":[5,7,8],"answer":5,"line":{"dir":"v","cells":[3,4,5,6],"value":5,"len":4,"score":20}},{"board":{"0":[1,7,8],"2":[9,6,8],"3":[9,2,3],"4":[9,2,8],"5":[9,7,8],"7":[9,7,4],"8":[1,2,4],"10":[9,2,4],"11":[5,6,3],"12":[5,7,4],"13":[5,6,4],"14":[1,7,4],"15":[9,7,3],"16":[5,7,3],"17":[1,6,8],"18":[5,2,4]},"empties":[6,1,9],"tile":[9,6,3],"answer":6,"line":{"dir":"v","cells":[3,4,5,6],"value":9,"len":4,"score":36}},{"board":{"0":[9,6,3],"1":[9,2,4],"2":[5,7,3],"3":[5,6,8],"5":[5,2,4],"6":[5,2,8],"7":[9,2,8],"8":[1,2,4],"9":[5,6,3],"10":[1,6,8],"11":[1,2,3],"12":[5,6,4],"15":[1,7,8],"16":[5,7,8],"17":[9,7,8],"18":[9,6,4]},"empties":[4,13,14],"tile":[5,2,3],"answer":4,"line":{"dir":"v","cells":[3,4,5,6],"value":5,"len":4,"score":20}},{"board":{"0":[9,7,8],"2":[1,6,8],"3":[5,6,3],"4":[9,6,8],"5":[9,6,4],"6":[1,2,4],"7":[1,6,3],"8":[5,2,8],"9":[1,7,3],"10":[9,2,4],"11":[9,7,3],"12":[5,6,4],"13":[5,7,4],"15":[5,2,3],"17":[5,6,8],"18":[9,7,4]},"empties":[14,1,16],"tile":[5,7,8],"answer":14,"line":{"dir":"v","cells":[12,13,14,15],"value":5,"len":4,"score":20}}],"2":[{"board":{"0":[1,6,4],"1":[5,2,4],"2":[1,7,8],"3":[9,6,8],"4":[9,7,8],"5":[5,7,8],"7":[9,2,4],"8":[9,2,3],"10":[5,7,4],"12":[1,2,8],"13":[5,6,8],"14":[1,7,4],"15":[9,2,8],"16":[9,6,4],"17":[1,7,3],"18":[5,6,3]},"empties":[6,11,9],"tile":[9,7,4],"answer":6,"line":{"dir":"ne","cells":[6,10,14,17],"value":7,"len":4,"score":28}},{"board":{"0":[5,7,3],"2":[5,7,4],"3":[5,2,8],"4":[5,6,3],"5":[9,7,4],"6":[9,7,3],"7":[5,6,8],"8":[1,6,3],"11":[1,2,3],"12":[1,6,8],"13":[9,2,3],"14":[9,6,8],"15":[5,2,3],"16":[5,2,4],"17":[1,7,3],"18":[9,6,3]},"empties":[1,9,10],"tile":[1,6,4],"answer":1,"line":{"dir":"ne","cells":[1,4,8,12],"value":6,"len":4,"score":24}},{"board":{"0":[5,7,3],"1":[1,6,8],"2":[1,6,3],"3":[9,2,3],"4":[9,6,4],"5":[1,7,4],"6":[9,2,8],"7":[5,6,8],"8":[9,6,8],"11":[9,7,3],"13":[5,6,3],"14":[1,6,4],"15":[1,7,3],"16":[5,7,4],"17":[5,6,4],"18":[9,2,4]},"empties":[12,9,10],"tile":[9,6,3],"answer":12,"line":{"dir":"ne","cells":[1,4,8,12],"value":6,"len":4,"score":24}},{"board":{"0":[1,6,8],"1":[1,7,4],"3":[1,2,4],"4":[5,7,3],"5":[1,7,3],"6":[5,2,3],"7":[5,2,4],"10":[5,6,3],"11":[1,6,3],"12":[9,7,4],"13":[5,7,8],"14":[1,6,4],"15":[5,6,8],"16":[9,7,3],"17":[5,2,8],"18":[1,7,8]},"empties":[8,2,9],"tile":[5,7,4],"answer":8,"line":{"dir":"ne","cells":[1,4,8,12],"value":7,"len":4,"score":28}},{"board":{"0":[9,6,4],"1":[1,2,8],"2":[1,7,4],"4":[5,6,8],"5":[1,7,8],"6":[9,7,8],"7":[5,7,3],"8":[1,2,3],"9":[1,7,3],"10":[5,2,3],"11":[5,6,3],"12":[1,6,4],"13":[5,7,8],"15":[5,2,8],"17":[9,2,3],"18":[5,6,4]},"empties":[16,14,3],"tile":[5,7,4],"answer":16,"line":{"dir":"ne","cells":[2,5,9,13,16],"value":7,"len":5,"score":35}},{"board":{"0":[5,6,8],"2":[1,2,3],"3":[5,6,4],"4":[1,7,4],"5":[9,2,3],"6":[9,2,4],"7":[9,2,8],"8":[5,7,8],"9":[5,2,4],"10":[9,7,4],"12":[9,7,3],"13":[5,2,3],"14":[9,6,3],"15":[1,6,4],"16":[1,7,8],"18":[1,2,8]},"empties":[1,11,17],"tile":[5,7,3],"answer":1,"line":{"dir":"ne","cells":[1,4,8,12],"value":7,"len":4,"score":28}},{"board":{"0":[5,6,3],"2":[9,2,8],"3":[9,7,4],"4":[9,2,3],"5":[9,6,8],"6":[1,7,4],"7":[1,6,4],"8":[5,2,4],"9":[5,2,3],"10":[1,7,3],"12":[1,2,8],"13":[1,2,4],"14":[9,7,3],"15":[5,6,4],"16":[9,7,8],"18":[5,2,8]},"empties":[17,11,1],"tile":[5,7,3],"answer":17,"line":{"dir":"ne","cells":[6,10,14,17],"value":7,"len":4,"score":28}},{"board":{"0":[9,2,4],"2":[5,2,3],"3":[1,6,3],"4":[5,2,8],"5":[9,2,8],"6":[1,7,4],"7":[5,6,8],"8":[1,2,8],"9":[1,2,3],"10":[9,7,3],"12":[9,7,4],"13":[9,6,8],"14":[5,7,3],"15":[5,6,3],"16":[1,6,8],"18":[5,7,8]},"empties":[17,1,11],"tile":[1,7,3],"answer":17,"line":{"dir":"ne","cells":[6,10,14,17],"value":7,"len":4,"score":28}}],"3":[{"board":{"14":[5,6,4],"10":[9,7,8],"1":[5,6,8],"0":[5,2,4],"7":[1,7,8],"13":[1,6,8],"12":[9,6,8],"15":[9,2,4],"9":[9,6,4],"6":[5,6,3],"4":[5,2,3],"18":[1,2,4],"3":[5,7,8],"17":[9,2,8]},"empties":[11,16,5,2,8],"tile":[5,2,8],"grades":{"11":"low","16":"medium","5":"medium","2":"medium","8":"good"},"results":{"11":[{"dir":"ne","cells":[11,15,18],"value":2,"len":3,"score":6}],"16":[{"dir":"se","cells":[7,12,16],"value":8,"len":3,"score":24}],"5":[{"dir":"v","cells":[3,4,5,6],"value":5,"len":4,"score":20}],"2":[{"dir":"v","cells":[0,1,2],"value":5,"len":3,"score":15}],"8":[{"dir":"se","cells":[3,8,13,17],"value":8,"len":4,"score":32}]},"totals":{"11":6,"16":24,"5":20,"2":15,"8":32},"hintLines":[{"dir":"se","cells":[3,8,13,17],"value":8},{"dir":"se","cells":[7,12,16],"value":8}]},{"board":{"3":[9,6,3],"10":[5,2,8],"12":[9,6,8],"2":[5,6,4],"6":[1,7,4],"1":[1,6,4],"7":[1,6,8],"9":[5,7,4],"13":[9,7,3],"17":[9,7,8],"14":[9,2,3],"4":[5,6,8],"5":[5,2,3],"18":[9,2,4]},"empties":[0,11,15,8,16],"tile":[9,6,4],"grades":{"0":"medium","11":"low","15":"good","8":"medium","16":"medium"},"results":{"0":[{"dir":"ne","cells":[0,3,7],"value":6,"len":3,"score":18}],"11":[{"dir":"se","cells":[2,6,11],"value":4,"len":3,"score":12}],"15":[{"dir":"v","cells":[12,13,14,15],"value":9,"len":4,"score":36}],"8":[{"dir":"ne","cells":[1,4,8,12],"value":6,"len":4,"score":24}],"16":[{"dir":"v","cells":[16,17,18],"value":9,"len":3,"score":27}]},"totals":{"0":18,"11":12,"15":36,"8":24,"16":27},"hintLines":[{"dir":"v","cells":[12,13,14,15],"value":9},{"dir":"v","cells":[16,17,18],"value":9}]},{"board":{"9":[1,7,4],"8":[1,2,8],"6":[5,6,3],"1":[1,7,8],"10":[1,6,4],"12":[9,2,8],"18":[1,6,3],"17":[9,6,8],"11":[5,6,8],"2":[1,2,4],"4":[1,2,3],"5":[9,7,3],"3":[5,2,8],"7":[5,7,8]},"empties":[16,15,14,0,13],"tile":[1,6,8],"grades":{"16":"medium","15":"medium","14":"medium","0":"low","13":"good"},"results":{"16":[{"dir":"se","cells":[7,12,16],"value":8,"len":3,"score":24}],"15":[{"dir":"ne","cells":[11,15,18],"value":6,"len":3,"score":18}],"14":[{"dir":"ne","cells":[6,10,14,17],"value":6,"len":4,"score":24}],"0":[{"dir":"v","cells":[0,1,2],"value":1,"len":3,"score":3}],"13":[{"dir":"se","cells":[3,8,13,17],"value":8,"len":4,"score":32}]},"totals":{"16":24,"15":18,"14":24,"0":3,"13":32},"hintLines":[{"dir":"se","cells":[3,8,13,17],"value":8},{"dir":"se","cells":[7,12,16],"value":8}]},{"board":{"6":[1,6,4],"16":[9,6,3],"3":[1,2,8],"1":[1,7,8],"4":[1,7,4],"17":[5,6,8],"10":[5,6,4],"7":[9,6,8],"11":[5,6,3],"0":[1,6,3],"15":[9,6,4],"8":[9,7,8],"9":[5,2,3],"12":[1,2,3]},"empties":[13,14,2,18,5],"tile":[1,6,8],"grades":{"13":"good","14":"medium","2":"low","18":"medium","5":"medium"},"results":{"13":[{"dir":"se","cells":[3,8,13,17],"value":8,"len":4,"score":32}],"14":[{"dir":"ne","cells":[6,10,14,17],"value":6,"len":4,"score":24}],"2":[{"dir":"v","cells":[0,1,2],"value":1,"len":3,"score":3}],"18":[{"dir":"ne","cells":[11,15,18],"value":6,"len":3,"score":18}],"5":[{"dir":"v","cells":[3,4,5,6],"value":1,"len":4,"score":4}]},"totals":{"13":32,"14":24,"2":3,"18":18,"5":4},"hintLines":[{"dir":"se","cells":[3,8,13,17],"value":8},{"dir":"ne","cells":[6,10,14,17],"value":6}]},{"board":{"1":[9,2,8],"10":[5,6,8],"13":[1,2,8],"9":[1,7,3],"12":[1,6,4],"6":[9,6,3],"2":[9,2,3],"8":[1,2,4],"18":[5,6,3],"16":[5,7,4],"3":[9,6,8],"17":[1,6,8],"5":[9,2,4],"15":[5,6,4]},"empties":[11,7,4,14,0],"tile":[9,6,4],"grades":{"11":"medium","7":"low","4":"good","14":"medium","0":"medium"},"results":{"11":[{"dir":"ne","cells":[11,15,18],"value":6,"len":3,"score":18}],"7":[{"dir":"se","cells":[7,12,16],"value":4,"len":3,"score":12}],"4":[{"dir":"v","cells":[3,4,5,6],"value":9,"len":4,"score":36}],"14":[{"dir":"ne","cells":[6,10,14,17],"value":6,"len":4,"score":24}],"0":[{"dir":"v","cells":[0,1,2],"value":9,"len":3,"score":27}]},"totals":{"11":18,"7":12,"4":36,"14":24,"0":27},"hintLines":[{"dir":"v","cells":[3,4,5,6],"value":9},{"dir":"v","cells":[0,1,2],"value":9}]},{"board":{"0":[1,2,3],"14":[5,6,8],"3":[9,2,8],"16":[5,6,4],"15":[9,7,8],"1":[1,2,8],"12":[9,2,3],"13":[9,7,4],"4":[9,2,4],"11":[1,7,8],"2":[5,7,8],"18":[5,6,3],"10":[1,6,8],"9":[5,7,3]},"empties":[5,8,6,17,7],"tile":[5,2,8],"grades":{"5":"good","8":"medium","6":"medium","17":"medium","7":"low"},"results":{"5":[{"dir":"se","cells":[1,5,10,15],"value":8,"len":4,"score":32}],"8":[{"dir":"ne","cells":[1,4,8,12],"value":2,"len":4,"score":8}],"6":[{"dir":"se","cells":[2,6,11],"value":8,"len":3,"score":24}],"17":[{"dir":"v","cells":[16,17,18],"value":5,"len":3,"score":15}],"7":[{"dir":"ne","cells":[0,3,7],"value":2,"len":3,"score":6}]},"totals":{"5":32,"8":8,"6":24,"17":15,"7":6},"hintLines":[{"dir":"se","cells":[1,5,10,15],"value":8},{"dir":"se","cells":[2,6,11],"value":8}]},{"board":{"1":[1,2,8],"14":[1,6,8],"8":[9,2,4],"9":[5,6,3],"13":[1,7,8],"15":[9,6,8],"11":[5,2,8],"2":[5,6,8],"17":[9,6,3],"7":[5,2,4],"18":[9,7,8],"0":[1,2,3],"12":[9,2,3],"5":[5,7,8]},"empties":[4,10,16,3,6],"tile":[9,2,8],"grades":{"4":"medium","10":"good","16":"medium","3":"low","6":"medium"},"results":{"4":[{"dir":"ne","cells":[1,4,8,12],"value":2,"len":4,"score":8}],"10":[{"dir":"se","cells":[1,5,10,15],"value":8,"len":4,"score":32}],"16":[{"dir":"v","cells":[16,17,18],"value":9,"len":3,"score":27}],"3":[{"dir":"ne","cells":[0,3,7],"value":2,"len":3,"score":6}],"6":[{"dir":"se","cells":[2,6,11],"value":8,"len":3,"score":24}]},"totals":{"4":8,"10":32,"16":27,"3":6,"6":24},"hintLines":[{"dir":"se","cells":[1,5,10,15],"value":8},{"dir":"v","cells":[16,17,18],"value":9}]},{"board":{"3":[5,6,8],"8":[5,2,8],"7":[9,6,8],"6":[5,7,4],"10":[1,7,8],"2":[5,2,3],"1":[5,6,3],"11":[1,7,4],"16":[1,2,3],"17":[9,7,8],"9":[9,6,4],"12":[5,6,4],"18":[1,7,3],"4":[5,2,4]},"empties":[15,0,5,14,13],"tile":[5,7,8],"grades":{"15":"medium","0":"low","5":"medium","14":"medium","13":"good"},"results":{"15":[{"dir":"ne","cells":[11,15,18],"value":7,"len":3,"score":21}],"0":[{"dir":"v","cells":[0,1,2],"value":5,"len":3,"score":15}],"5":[{"dir":"v","cells":[3,4,5,6],"value":5,"len":4,"score":20}],"14":[{"dir":"ne","cells":[6,10,14,17],"value":7,"len":4,"score":28}],"13":[{"dir":"se","cells":[3,8,13,17],"value":8,"len":4,"score":32}]},"totals":{"15":21,"0":15,"5":20,"14":28,"13":32},"hintLines":[{"dir":"se","cells":[3,8,13,17],"value":8},{"dir":"ne","cells":[6,10,14,17],"value":7}]}]}};
+var CELLS = DATA.cells, LINES = DATA.lines;
+var COLORS = {1:"#38bdf8",5:"#eab308",9:"#2563eb",2:"#ec4899",6:"#f97316",7:"#22c55e",3:"#a855f7",4:"#0d9488",8:"#ef4444"};
+var DIRSYM = {v:"│", ne:"↗", se:"↘"};
+var DIRNAME = {v:"세로(│)", ne:"비스듬한(↗)", se:"비스듬한(↘)"};
+var CIRC = ["①","②","③","④","⑤"];
+var STAGE = {
+  1:{t:"1단계 — 어디에 놓는 게 좋을까?", g:"세로(│) 줄 찾기",
+     hint:"세로(│)로 같은 숫자가 모인 줄이 보이나요?",
+     miss:"이 자리에서는 같은 숫자가 이어지지 않았어요. 세로 방향을 다시 따라가 볼까요?"},
+  2:{t:"2단계 — 어디에 놓는 게 좋을까?", g:"비스듬한(↗) 줄 찾기",
+     hint:"세로 말고, ↗ 방향으로도 이어지는 줄이 있을까요?",
+     miss:"이 자리에서는 줄이 끝까지 이어지지 않았어요. ↗ 방향을 따라가 볼까요?"},
+  3:{t:"3단계 — 어떤 줄을 포기하는 것이 좋을까?", g:"세 방향 모두 살펴보기",
+     hint:"두 줄을 다 살릴 수는 없어요. 어느 줄이 점수가 더 클까요?",
+     miss:""}
+};
+var GRADE = {
+  good:{cls:"ok", msg:"좋은 전략이에요. 점수가 더 큰 줄을 지켰어요."},
+  medium:{cls:"hint", msg:"이런 방법도 생각할 수 있어요. 다른 줄을 지켰다면 몇 점이었을까요?"},
+  low:{cls:"hint", msg:"줄을 완성했어요. 더 큰 점수를 만들 방법은 없었을까요?"}
+};
+
+/* ================= 기하 ================= */
+var RAD = 60, OX = 280, OY = 300, SQ3 = Math.sqrt(3);
+function cxy(i){
+  var c = CELLS[i];
+  return { x: OX + 1.5 * RAD * c[0], y: OY + SQ3 * RAD * (c[1] + c[0] / 2) };
+}
+function hexPts(cx, cy, r){
+  var a = [];
+  for (var i = 0; i < 6; i++){
+    var ang = Math.PI / 180 * (60 * i);
+    a.push((cx + r * Math.cos(ang)).toFixed(1) + "," + (cy + r * Math.sin(ang)).toFixed(1));
+  }
+  return a.join(" ");
+}
+var UID = 0;
+function bandLine(cx, cy, r, dir, val){
+  var w = (0.30 * SQ3 * r).toFixed(1), k = 1.35, x1, y1, x2, y2;
+  if (dir === "v"){ x1 = cx; y1 = cy - 1.3 * r; x2 = cx; y2 = cy + 1.3 * r; }
+  else if (dir === "ne"){ x1 = cx - 0.75 * r * k; y1 = cy + 0.433 * r * k; x2 = cx + 0.75 * r * k; y2 = cy - 0.433 * r * k; }
+  else { x1 = cx - 0.75 * r * k; y1 = cy - 0.433 * r * k; x2 = cx + 0.75 * r * k; y2 = cy + 0.433 * r * k; }
+  return '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) +
+         '" stroke="' + COLORS[val] + '" stroke-width="' + w + '"/>';
+}
+function numMark(x, y, val, r){
+  return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="middle" dominant-baseline="central"' +
+         ' font-size="' + (0.35 * r).toFixed(1) + '" font-weight="900" fill="#ffffff" stroke="#050038" stroke-width="' +
+         (0.06 * r).toFixed(1) + '" style="paint-order:stroke fill">' + val + '</text>';
+}
+function tileMarkup(cx, cy, r, t, op){
+  var id = "cp" + (UID++);
+  var pts = hexPts(cx, cy, r - 1.5);
+  var s = '<g opacity="' + op + '">';
+  s += '<defs><clipPath id="' + id + '"><polygon points="' + pts + '"/></clipPath></defs>';
+  s += '<polygon points="' + pts + '" fill="#ffffff"/>';
+  s += '<g clip-path="url(#' + id + ')">';
+  s += bandLine(cx, cy, r, "se", t[2]);
+  s += bandLine(cx, cy, r, "ne", t[1]);
+  s += bandLine(cx, cy, r, "v", t[0]);
+  s += '</g>';
+  s += numMark(cx, cy + 0.60 * r, t[0], r);
+  s += numMark(cx + 0.56 * r, cy - 0.325 * r, t[1], r);
+  s += numMark(cx - 0.56 * r, cy - 0.325 * r, t[2], r);
+  s += '<polygon points="' + pts + '" fill="none" stroke="#050038" stroke-width="' + (0.05 * r).toFixed(1) + '"/>';
+  s += '</g>';
+  return s;
+}
+
+/* ================= 상태 ================= */
+var S = {
+  stage: 1, pi: 0, p: null, board: {}, order: [],
+  selected: null, placed: null, completed: [],
+  hintUsed: false, hintDirs: null, hintEq: null,
+  phase: "placing", scoring: null
+};
+var $ = function(id){ return document.getElementById(id); };
+
+function attrOf(dir){ return dir === "v" ? 0 : (dir === "ne" ? 1 : 2); }
+
+function findCompleted(at){
+  var out = [];
+  for (var i = 0; i < LINES.length; i++){
+    var L = LINES[i];
+    if (L.cells.indexOf(at) < 0) continue;
+    var k = attrOf(L.dir), ok = true, v0 = null;
+    for (var j = 0; j < L.cells.length; j++){
+      var t = S.board[L.cells[j]];
+      if (!t){ ok = false; break; }
+      if (v0 === null) v0 = t[k];
+      else if (t[k] !== v0){ ok = false; break; }
+    }
+    if (ok){
+      out.push({ dir: L.dir, cells: L.cells, value: v0, len: L.cells.length, score: v0 * L.cells.length });
+    }
+  }
+  out.sort(function(a, b){ return b.score - a.score; });
+  return out;
+}
+
+/* ================= 문제 로딩 ================= */
+function loadProblem(stage, pi, keepHint){
+  S.stage = stage;
+  S.pi = ((pi % DATA.problems[stage].length) + DATA.problems[stage].length) % DATA.problems[stage].length;
+  var p = DATA.problems[stage][S.pi];
+  S.p = p;
+  S.board = {};
+  for (var k in p.board){ S.board[parseInt(k, 10)] = p.board[k]; }
+  S.order = p.empties.slice().sort(function(a, b){
+    var A = cxy(a), B = cxy(b);
+    return (A.y - B.y) || (A.x - B.x);
+  });
+  S.selected = null; S.placed = null; S.completed = [];
+  S.hintDirs = null; S.hintEq = null;
+  S.phase = "placing"; S.scoring = null;
+  if (!keepHint) S.hintUsed = false;
+
+  $("s-title").textContent = STAGE[stage].t;
+  $("s-tag").textContent = STAGE[stage].g;
+  var tabs = document.querySelectorAll(".tab");
+  for (var i = 0; i < tabs.length; i++){
+    tabs[i].classList.toggle("on", parseInt(tabs[i].dataset.st, 10) === stage);
+  }
+  setBanner("칩을 놓을 자리를 골라 보세요. " + CIRC[0] + " ~ " + CIRC[S.order.length - 1] + " 중 어디가 좋을까요?", "");
+  renderAll();
+}
+
+/* ================= 렌더 ================= */
+function renderAll(){ renderBoard(); renderChip(); renderScore(); renderButtons(); }
+
+function renderButtons(){
+  $("btn-place").disabled = !(S.phase === "placing" && S.selected !== null);
+  var hb = $("btn-hint");
+  hb.disabled = S.hintUsed || S.phase === "done";
+  hb.textContent = "힌트 (" + (S.hintUsed ? 1 : 0) + "/1)";
+}
+
+function renderChip(){
+  $("chip").innerHTML = tileMarkup(75, 75, 66, S.p.tile, 1);
+  $("ghost").innerHTML = tileMarkup(75, 75, 66, S.p.tile, 0.95);
+}
+
+function lineEnds(L){
+  var a = cxy(L.cells[0]), b = cxy(L.cells[L.cells.length - 1]);
+  var dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx * dx + dy * dy);
+  var ux = dx / len, uy = dy / len, e = RAD * 0.62;
+  return { x1: a.x - ux * e, y1: a.y - uy * e, x2: b.x + ux * e, y2: b.y + uy * e };
+}
+
+function renderBoard(){
+  var s = "", i, c;
+  for (i = 0; i < 19; i++){
+    c = cxy(i);
+    var t = S.board[i];
+    if (t){
+      s += tileMarkup(c.x, c.y, RAD, t, 1);
+    } else {
+      var sel = (S.selected === i);
+      s += '<polygon points="' + hexPts(c.x, c.y, RAD - 2) + '" fill="#141240" stroke="' +
+           (sel ? "#ffd02f" : "#3b3768") + '" stroke-width="' + (sel ? 6 : 3) + '"' +
+           (sel ? "" : ' stroke-dasharray="8 7"') + '/>';
+      if (sel) s += tileMarkup(c.x, c.y, RAD, S.p.tile, 0.45);
+      var n = S.order.indexOf(i);
+      s += '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + (RAD * 0.40).toFixed(1) +
+           '" fill="#ffffff" stroke="' + (sel ? "#8a6d00" : "#050038") + '" stroke-width="3"/>';
+      s += '<text x="' + c.x + '" y="' + c.y + '" text-anchor="middle" dominant-baseline="central" font-size="' +
+           (RAD * 0.55).toFixed(1) + '" font-weight="900" fill="' + (sel ? "#8a6d00" : "#050038") + '">' + (n + 1) + '</text>';
+    }
+  }
+
+  /* 힌트 점선 */
+  if (S.hintDirs){
+    for (i = 0; i < S.hintDirs.length; i++){
+      var h = S.hintDirs[i], e = lineEnds(h.L);
+      s += '<line class="hintline" x1="' + e.x1.toFixed(1) + '" y1="' + e.y1.toFixed(1) + '" x2="' + e.x2.toFixed(1) +
+           '" y2="' + e.y2.toFixed(1) + '" stroke="' + h.color + '"' +
+           (h.dash ? ' stroke-dasharray="' + h.dash + '"' : "") + '/>';
+    }
+  }
+
+  /* 새로 완성된 줄 */
+  for (i = 0; i < S.completed.length; i++){
+    var L = S.completed[i], en = lineEnds(L), d = (i * 0.3).toFixed(2);
+    s += '<line class="glow" style="animation-delay:' + d + 's" x1="' + en.x1.toFixed(1) + '" y1="' + en.y1.toFixed(1) +
+         '" x2="' + en.x2.toFixed(1) + '" y2="' + en.y2.toFixed(1) + '" stroke="' + COLORS[L.value] + '"/>';
+    s += '<line class="beam" style="animation-delay:' + d + 's" x1="' + en.x1.toFixed(1) + '" y1="' + en.y1.toFixed(1) +
+         '" x2="' + en.x2.toFixed(1) + '" y2="' + en.y2.toFixed(1) + '"/>';
+  }
+
+  /* 두 번 틀리면 세기 도우미 번호 */
+  if (S.scoring){
+    var row = S.scoring.rows[S.scoring.idx];
+    if (row && row.type === "line" && row.errors >= 2){
+      for (i = 0; i < row.line.cells.length; i++){
+        var cc = cxy(row.line.cells[i]);
+        s += '<circle cx="' + cc.x + '" cy="' + (cc.y - RAD * 0.05) + '" r="21" fill="#fff" stroke="#dc2626" stroke-width="4"/>';
+        s += '<text x="' + cc.x + '" y="' + (cc.y - RAD * 0.05) + '" text-anchor="middle" dominant-baseline="central"' +
+             ' font-size="24" font-weight="900" fill="#dc2626">' + (i + 1) + '</text>';
+      }
+    }
+  }
+
+  /* 클릭 레이어 */
+  var lock = (S.phase !== "placing");
+  for (i = 0; i < 19; i++){
+    c = cxy(i);
+    var can = (!lock && !S.board[i]);
+    s += '<polygon class="hit' + (can ? "" : " locked") + '" data-idx="' + i + '" points="' + hexPts(c.x, c.y, RAD) + '"/>';
+  }
+  $("board").innerHTML = s;
+}
+
+function setBanner(html, cls){
+  var b = $("banner");
+  b.className = cls || "";
+  b.innerHTML = html;
+}
+
+/* ================= 칩 놓기 ================= */
+function selectCell(i){
+  if (S.phase !== "placing") return;
+  if (S.board[i]) return;
+  S.selected = i;
+  var n = S.order.indexOf(i);
+  setBanner(CIRC[n] + "번 칸을 골랐어요. 왜 이 자리를 골랐는지 말해 볼까요?", "");
+  renderAll();
+}
+
+function placeChip(){
+  if (S.phase !== "placing" || S.selected === null) return;
+  S.placed = S.selected;
+  S.board[S.placed] = S.p.tile;
+  S.completed = findCompleted(S.placed);
+  S.selected = null;
+
+  if (S.stage === 3){
+    S.phase = "ask";
+    setBanner('<span>어떤 줄을 포기했나요?</span><button class="mini" id="ask-next">이야기했어요 →</button>', "hint");
+    renderAll();
+    $("ask-next").onclick = function(){
+      var g = S.p.grades[String(S.placed)];
+      var info = GRADE[g];
+      setBanner(info.msg, info.cls);
+      startScoring();
+    };
+    return;
+  }
+
+  if (S.completed.length > 0){
+    var L = S.completed[0];
+    var msg = DIRNAME[L.dir] + " " + L.value + " 줄이 완성되었어요!";
+    if (S.completed.length > 1) msg += " " + DIRSYM[S.completed[1].dir] + " 방향 줄도 함께 이어졌어요!";
+    setBanner(msg, "ok");
+    startScoring();
+  } else {
+    S.phase = "miss";
+    setBanner(STAGE[S.stage].miss, "warn");
+    renderAll();
+  }
+}
+
+/* ================= 점수 계산 ================= */
+function startScoring(){
+  S.phase = "scoring";
+  var rows = [];
+  for (var i = 0; i < S.completed.length; i++){
+    rows.push({ type: "line", line: S.completed[i], vals: ["", "", ""], done: false, errors: 0 });
+  }
+  if (S.completed.length > 1){
+    var tot = 0;
+    for (var j = 0; j < S.completed.length; j++) tot += S.completed[j].score;
+    rows.push({ type: "sum", total: tot, vals: [""], done: false, errors: 0 });
+  }
+  S.scoring = { rows: rows, idx: 0, field: 0, msg: "완성된 줄의 식을 채워 보세요." };
+  renderAll();
+}
+
+function renderScore(){
+  var box = $("score"), pad = $("pad");
+  if (!S.scoring){
+    pad.classList.remove("show");
+    var m = "칩을 놓아 줄이 완성되면<br>여기에서 점수를 계산해요.";
+    if (S.phase === "miss") m = "완성된 줄이 없어요.<br>[다시 시도해보기]를 눌러 다른 자리를 찾아볼까요?";
+    else if (S.phase === "ask") m = "먼저 어떤 줄을 포기했는지<br>이야기한 뒤에 점수를 계산해요.";
+    box.innerHTML = '<p class="muted">' + m + '</p>';
+    return;
+  }
+  pad.classList.add("show");
+  var h = "";
+  for (var i = 0; i < S.scoring.rows.length; i++){
+    var r = S.scoring.rows[i];
+    var act = (i === S.scoring.idx);
+    if (r.type === "line"){
+      h += '<div class="srow">';
+      h += '<span class="tagline"><i style="background:' + COLORS[r.line.value] + '"></i>' + DIRSYM[r.line.dir] + ' 줄</span>';
+      h += boxHtml(i, 0, r, act) + '<span class="op">×</span>' + boxHtml(i, 1, r, act) +
+           '<span class="op">=</span>' + boxHtml(i, 2, r, act, true);
+      h += '</div>';
+    } else {
+      var parts = [];
+      for (var j = 0; j < S.completed.length; j++) parts.push(S.completed[j].score);
+      h += '<div class="srow"><span class="tagline">합계</span><span class="op">' +
+           parts.join(" + ") + ' =</span>' + boxHtml(i, 0, r, act, true) + '</div>';
+    }
+  }
+  h += '<div class="fb">' + S.scoring.msg + '</div>';
+  box.innerHTML = h;
+  var boxes = box.querySelectorAll(".box");
+  for (var b = 0; b < boxes.length; b++){
+    boxes[b].onclick = function(){
+      var ri = parseInt(this.dataset.r, 10), fi = parseInt(this.dataset.f, 10);
+      if (ri !== S.scoring.idx) return;
+      S.scoring.field = fi;
+      renderScore();
+    };
+  }
+}
+function boxHtml(ri, fi, r, act, wide){
+  var cls = "box" + (wide ? " wide" : "");
+  if (r.done) cls += " ok";
+  else if (act && S.scoring.field === fi) cls += " on";
+  if (r.wrong && r.wrong.indexOf(fi) >= 0) cls += " no";
+  return '<div class="' + cls + '" data-r="' + ri + '" data-f="' + fi + '">' + (r.vals[fi] || "") + '</div>';
+}
+
+function key(k){
+  if (!S.scoring) return;
+  var r = S.scoring.rows[S.scoring.idx];
+  if (!r || r.done) return;
+  if (k === "ok"){ checkRow(); return; }
+  r.wrong = null;
+  if (k === "back"){
+    r.vals[S.scoring.field] = r.vals[S.scoring.field].slice(0, -1);
+  } else {
+    if (r.vals[S.scoring.field].length < 3) r.vals[S.scoring.field] += k;
+  }
+  renderScore();
+}
+
+function checkRow(){
+  var sc = S.scoring, r = sc.rows[sc.idx];
+  if (!r || r.done) return;
+  if (r.type === "line"){
+    var a = parseInt(r.vals[0], 10), b = parseInt(r.vals[1], 10), c = parseInt(r.vals[2], 10);
+    var V = r.line.value, N = r.line.len, P = r.line.score;
+    var pairOK = ((a === V && b === N) || (a === N && b === V));
+    var totOK = (c === P);
+    if (pairOK && totOK){
+      r.done = true; r.wrong = null;
+      sc.msg = "잘했어요! " + V + "이(가) " + N + "칸 연결되어 " + P + "점이에요.";
+      advanceRow();
+      return;
+    }
+    r.errors++;
+    var w = [];
+    if (!pairOK){
+      if (a !== V && a !== N) w.push(0);
+      if (b !== V && b !== N) w.push(1);
+      if (w.length === 0){ w.push(0); w.push(1); }
+    }
+    if (!totOK) w.push(2);
+    r.wrong = w;
+    sc.msg = (r.errors >= 2)
+      ? "연결된 타일에 번호를 붙였어요. 몇 개인지 함께 세어 볼까요?"
+      : "무엇을 다시 생각해볼까요? 연결된 타일이 몇 개인지 세어볼까요?";
+    renderAll();
+  } else {
+    var t = parseInt(r.vals[0], 10);
+    if (t === r.total){
+      r.done = true; r.wrong = null;
+      sc.msg = "합계까지 정확해요! 모두 " + r.total + "점이에요.";
+      advanceRow();
+    } else {
+      r.errors++; r.wrong = [0];
+      sc.msg = "두 점수를 하나씩 다시 더해 볼까요?";
+      renderAll();
+    }
+  }
+}
+
+function advanceRow(){
+  var sc = S.scoring;
+  var nxt = -1;
+  for (var i = 0; i < sc.rows.length; i++){ if (!sc.rows[i].done){ nxt = i; break; } }
+  if (nxt < 0){
+    S.phase = "done";
+    var tot = 0;
+    for (var j = 0; j < S.completed.length; j++) tot += S.completed[j].score;
+    var tail = (S.stage < 3) ? " 다음 문제나 다음 단계로 가 볼까요?" : " 이제 진짜 게임을 할 준비가 됐어요!";
+    setBanner("모두 맞혔어요! 이번에 새로 얻은 점수는 " + tot + "점이에요." + tail, "ok");
+  } else {
+    sc.idx = nxt; sc.field = 0;
+  }
+  renderAll();
+}
+
+/* ================= 힌트 ================= */
+function useHint(){
+  if (S.hintUsed || S.phase === "done") return;
+  S.hintUsed = true;
+  var dirs = [], i;
+  if (S.stage === 1){
+    for (i = 0; i < LINES.length; i++) if (LINES[i].dir === "v") dirs.push({ L: LINES[i], color: "#ffd02f" });
+    setBanner(STAGE[1].hint, "hint");
+  } else if (S.stage === 2){
+    for (i = 0; i < LINES.length; i++) if (LINES[i].dir === "ne") dirs.push({ L: LINES[i], color: "#0fbcb0" });
+    setBanner(STAGE[2].hint, "hint");
+  } else {
+    var hl = S.p.hintLines, pal = ["#ffd02f", "#ff9999"], dash = ["14 9", "5 8"], eq = "";
+    for (i = 0; i < hl.length; i++){
+      dirs.push({ L: { dir: hl[i].dir, cells: hl[i].cells }, color: pal[i], dash: dash[i] });
+      eq += '<span class="eq"><span class="sw" style="background:' + COLORS[hl[i].value] + '"></span>' +
+            DIRSYM[hl[i].dir] + " " + hl[i].value + " × ? = ?</span>";
+    }
+    setBanner(STAGE[3].hint + " " + eq, "hint");
+  }
+  S.hintDirs = dirs;
+  renderAll();
+}
+
+/* ================= 이벤트 ================= */
+$("board").addEventListener("click", function(e){
+  var el = e.target.closest ? e.target.closest("[data-idx]") : null;
+  if (!el) return;
+  selectCell(parseInt(el.dataset.idx, 10));
+});
+$("btn-place").onclick = placeChip;
+$("btn-hint").onclick = useHint;
+$("btn-retry").onclick = function(){ loadProblem(S.stage, S.pi, true); };
+$("btn-next").onclick = function(){ loadProblem(S.stage, S.pi + 1, false); };
+$("btn-home").onclick = function(){ $("home").classList.remove("off"); };
+var tabsEl = document.querySelectorAll(".tab");
+for (var ti = 0; ti < tabsEl.length; ti++){
+  tabsEl[ti].onclick = function(){ loadProblem(parseInt(this.dataset.st, 10), 0, false); };
+}
+var goEl = document.querySelectorAll("[data-go]");
+for (var gi = 0; gi < goEl.length; gi++){
+  goEl[gi].onclick = function(){
+    $("home").classList.add("off");
+    loadProblem(parseInt(this.dataset.go, 10), 0, false);
+  };
+}
+var padEl = $("pad").querySelectorAll("button");
+for (var pi2 = 0; pi2 < padEl.length; pi2++){
+  padEl[pi2].onclick = function(){ key(this.dataset.k); };
+}
+document.addEventListener("keydown", function(e){
+  if (!S.scoring) return;
+  if (e.key >= "0" && e.key <= "9") key(e.key);
+  else if (e.key === "Backspace"){ e.preventDefault(); key("back"); }
+  else if (e.key === "Enter") key("ok");
+  else if (e.key === "Tab"){
+    e.preventDefault();
+    var r = S.scoring.rows[S.scoring.idx];
+    if (r) { S.scoring.field = (S.scoring.field + 1) % r.vals.length; renderScore(); }
+  }
+});
+
+/* 드래그로 놓기 */
+(function(){
+  var dragging = false;
+  var chip = $("chip"), ghost = $("ghost");
+  function start(e){
+    if (S.phase !== "placing") return;
+    dragging = true;
+    chip.classList.add("drag");
+    ghost.style.display = "block";
+    move(e);
+    e.preventDefault();
+  }
+  function move(e){
+    if (!dragging) return;
+    var pt = e.touches ? e.touches[0] : e;
+    ghost.style.left = pt.clientX + "px";
+    ghost.style.top = pt.clientY + "px";
+  }
+  function end(e){
+    if (!dragging) return;
+    dragging = false;
+    chip.classList.remove("drag");
+    ghost.style.display = "none";
+    var pt = e.changedTouches ? e.changedTouches[0] : e;
+    var el = document.elementFromPoint(pt.clientX, pt.clientY);
+    if (el && el.dataset && el.dataset.idx !== undefined){
+      var i = parseInt(el.dataset.idx, 10);
+      if (!S.board[i]){ selectCell(i); placeChip(); }
+    }
+  }
+  chip.addEventListener("pointerdown", start);
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", end);
+})();
+
+/* 시작 */
+loadProblem(1, 0, false);
+</script>
+</body>
+</html>
